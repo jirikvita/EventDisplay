@@ -24,7 +24,7 @@
 #include <utility>
 #include <vector>
 
-// #include "TROOT.h"
+#include "TROOT.h"
 #include "TSystem.h"
 // #include "TPostScript.h"
 #include "TCanvas.h"
@@ -48,7 +48,7 @@ class ttbarEventDisplay {
  public:
 
  // Constructor, destructor: 
-  ttbarEventDisplay(int runno, int evtno, bool doOneCavas);
+  ttbarEventDisplay(int runno = 0, int evtno = 0, bool doOneCavas = false);
   ~ttbarEventDisplay();
   
   // dag + jiri's modifications

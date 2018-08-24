@@ -1,19 +1,19 @@
 ######################################################
 # A generic Makefile which does dependencies         #
-# autmoatically                                      #
+# automatically                                      #
 #                                                    #
 # Original by Kurt Rinnert                           #
 # Modified by Carl Gwilliam                          #
-#                                                    #
+# Modified by Jiri Kvita                             #
 # 1. Place in your top dir                           #
 # 2. Change HEADERPAT and SRCPAT to your extension   #
 #    naming (e.g. C cpp cxx h hh)                    #
-# 3. Change LIBNAME to the wanted library name       #
+# 3. Changeg LIBNAME to the wanted library name       #
 # 4. Do 'gmake setup' to make dir structure and      #
 #    copy files there:                               #
-#    a. headers in include                           #
-#    b. source files in src                          #
-#    c. program files (containing main) in prg       #
+#    a. headers in include/                          #
+#    b. source files in src/*.cpp                    #
+#    c. program files (containing main) in src/*.cxx #
 #                                                    #
 ######################################################
 
@@ -21,41 +21,42 @@
 LIBDIR = lib
 BINDIR = bin
 INCDIR = include
-BOOSTDIR = /usr/local/boost_1_54_0/
+BOOSTDIR = $(shell echo $BOOST_ROOT)
 SRCDIR = src
-PRGDIR = prg
+PRGDIR = src
 TMPDIR = tmp
 BINOBJSDIR = $(TMPDIR)/bin
 LIBOBJSDIR = $(TMPDIR)/lib
 DEPSDIR    = $(TMPDIR)/deps
 
 #paterns
-HEADERPAT = hpp
+HEADERPAT = h
 SOURCEPAT = cpp
+EXEPAT = cxx
 
 #source files
 INCLUDEFILES = $(wildcard $(INCDIR)/*.$(HEADERPAT))
 LIBCPPFILES  = $(wildcard $(SRCDIR)/*.$(SOURCEPAT))
-PRGCPPFILES  = $(wildcard $(PRGDIR)/*.$(SOURCEPAT))
+PRGCPPFILES  = $(wildcard $(PRGDIR)/*.$(EXEPAT))
 
 #targets
 LIBNAME = EventDisplay
 LIB     = $(LIBDIR)/lib$(LIBNAME).a
 LIBOBJS = $(subst $(SRCDIR),$(LIBOBJSDIR),$(subst .$(SOURCEPAT),.o,$(LIBCPPFILES)))
-BINS    = $(subst $(PRGDIR),$(BINDIR),$(subst .$(SOURCEPAT),,$(PRGCPPFILES)))
-BINOBJS = $(subst $(PRGDIR),$(BINOBJSDIR),$(subst .$(SOURCEPAT),.o,$(PRGCPPFILES)))
+BINS    = $(subst $(PRGDIR),$(BINDIR),$(subst .$(EXEPAT),,$(PRGCPPFILES)))
+BINOBJS = $(subst $(PRGDIR),$(BINOBJSDIR),$(subst .$(EXEPAT),.o,$(PRGCPPFILES)))
 LIBDEPS = $(subst $(SRCDIR),$(DEPSDIR),$(LIBCPPFILES:.$(SOURCEPAT)=.d))
-BINDEPS = $(subst $(PRGDIR),$(DEPSDIR),$(PRGCPPFILES:.$(SOURCEPAT)=.d))
+BINDEPS = $(subst $(PRGDIR),$(DEPSDIR),$(PRGCPPFILES:.$(EXEPAT)=.d))
 
 #tools
 CPP = g++ -std=c++11
 LD  = g++ -std=c++11
 AR  = ar
-DEP = gcc -std=c++11
+DEP = g++ -std=c++11
 
 #flags
 #CPPBASEFLAGS = -c -Wall -Werror -ansi -pedantic -I$(INCDIR)
-CPPBASEFLAGS =  -c -Wall -I$(INCDIR) -I$(BOOSTDIR)
+CPPBASEFLAGS =  -c -Wall -I$(INCDIR) -I$(BOOSTDIR) 
 DEPFLAGS = -MM -I$(INCDIR) -I$(shell root-config --incdir)
 
 DEBUG=yes
@@ -85,9 +86,8 @@ ROOTCPPFLAGS = $(shell root-config --cflags) -Wno-long-long
 # default:
 ROOTLDFLAGS  = $(shell root-config --libs) 
 
-#EXTRALIBSPATH=${TestArea}/DataQuality/GoodRunsLists/StandAlone/GoodRunsListsLib.so
-#EXTRALIBSPATH=./StandAlone/GoodRunsListsLib.so
-#EXTRALIBSPATH=""
+EXTRALIBSPATH=
+# "$(shell echo ${delphespath})/libDelphes.so"
 
 CPPFLAGS = $(CPPDBGFLAGS) $(CPPPROFLAGS) $(CPPOPTFLAGS) $(CPPBASEFLAGS) $(ROOTCPPFLAGS) -std=c++11
 
@@ -108,14 +108,14 @@ LOADLIBS = -L$(LIBDIR) -l$(LIBNAME)
 all: bin
 	echo "* all done."
 
-# bin depends on static library (.a) for classes + binary objects for prgs (.o) + binarys for prgs
+# bin depends on static library (.a) for classes + binary objects for prgs (.o) + binaries for prgs
 bin: $(LIB) $(BINOBJS) $(BINS) $(EXTRALIBSPATH)
 # lib dependes on static library for classes (LIB).  Will "make" if not up-to-date
 lib: $(LIB)
 
 $(BINS):$(BINDIR)%:$(BINOBJSDIR)/%.o $(LIB)
-	echo "* linking: $(@F)"
-	$(LD) $(LDFLAGS)  $(EXTRALIBSPATH) -o $@ $< $(LOADLIBS)
+	echo "* linking: $(@F) with $(LDFLAGS)"
+	$(LD)   $(EXTRALIBSPATH) -o $@_x $< $(LOADLIBS) $(LDFLAGS)
 
 
 # Static library (LIB) depends on library objects (.o) for each class (LIBOBJS).  
@@ -131,7 +131,7 @@ $(LIBOBJS):$(LIBOBJSDIR)/%.o:$(SRCDIR)/%.$(SOURCEPAT)
 
 # Binary object for each prg (BINOBJS) depends on corresponding main file 
 # (in prgdir with .o replaced by .SOURCEPAT) and will compile if no up-to-date 
-$(BINOBJS):$(BINOBJSDIR)/%.o:$(PRGDIR)/%.$(SOURCEPAT)
+$(BINOBJS):$(BINOBJSDIR)/%.o:$(PRGDIR)/%.$(EXEPAT)
 	echo "* compiling: $(<F)"
 	$(CPP) $(CPPFLAGS) -o $@ $<
 
@@ -140,7 +140,7 @@ $(LIBDEPS):$(DEPSDIR)/%.d:$(SRCDIR)/%.$(SOURCEPAT)
 	set -e; $(DEP) $(DEPFLAGS) $< | sed 's!\w.*\.o[ :]*!$(LIBOBJSDIR)/$*.o $@ : !' > $@;\
 	[ -s $@ ] || rm -f $@
 
-$(BINDEPS):$(DEPSDIR)/%.d:$(PRGDIR)/%.$(SOURCEPAT)
+$(BINDEPS):$(DEPSDIR)/%.d:$(PRGDIR)/%.$(EXECEPAT)
 	echo "* creating dependencies: $(<F)"
 	set -e; $(DEP) $(DEPFLAGS) $< | sed 's!\w.*\.o[ :]*!$(BINOBJSDIR)/$*.o $@ : !' > $@;\
 	[ -s $@ ] || rm -f $@
@@ -161,7 +161,7 @@ setup:
 	echo "* creating directory structure"
 	mkdir -p $(SRCDIR) $(PRGDIR) $(BINDIR) $(LIBDIR) $(INCDIR) $(TMPDIR)/deps $(TMPDIR)/lib $(TMPDIR)/bin
 	echo "* Moving program files to $(PRGDIR)"
-	mv $(shell grep -H "main()" *.$(SOURCEPAT) | cut -d : -f 1) $(PRGDIR)/.
+	mv $(shell grep -H "main()" *.$(EXEPAT) | cut -d : -f 1) $(PRGDIR)/.
 	echo "* Moving header files to $(INDIR)"
 	mv *.$(HEADERPAT) $(INCDIR)/.
 	echo "* Moving source files to $(SRCDIR)"
@@ -185,24 +185,3 @@ ifeq (,$(findstring setup,$(MAKECMDGOALS)))
 endif
 endif
 
-
-# MACROS:
-#$@ Full name of the current target. 
-#$? A list of files for current dependency which are out-of-date. 
-#$< The source file of the current (single) dependency.
-
-#* creating dependencies: IPBase.C
-#* creating dependencies: IPAnal.C
-#* creating dependencies: Main.C
-#* creating dependencies: Fit.C
-#echo "* compiling: IPAnal.C"
-#g++    -c -Wall -Iinclude -pthread -m32 -I/batchsoft/atlas/athena/13.0.30_PCACHE/sw/lcg/external/root/5.14.00h/slc3_ia32_gcc323/root/include -Wno-long-long -o tmp/lib/IPAnal.o src/IPAnal.C
-#echo "* compiling: IPBase.C"
-#g++    -c -Wall -Iinclude -pthread -m32 -I/batchsoft/atlas/athena/13.0.30_PCACHE/sw/lcg/external/root/5.14.00h/slc3_ia32_gcc323/root/include -Wno-long-long -o tmp/lib/IPBase.o src/IPBase.C
-#echo "* building library: libIP.a"
-#ar -rc lib/libIP.a tmp/lib/IPAnal.o tmp/lib/IPBase.o
-#echo "* compiling: Fit.C"
-#g++    -c -Wall -Iinclude -pthread -m32 -I/batchsoft/atlas/athena/13.0.30_PCACHE/sw/lcg/external/root/5.14.00h/slc3_ia32_gcc323/root/include -Wno-long-long -o tmp/bin/Fit.o prg/Fit.C
-#echo "* compiling: Main.C"
-#g++    -c -Wall -Iinclude -pthread -m32 -I/batchsoft/atlas/athena/13.0.30_PCACHE/sw/lcg/external/root/5.14.00h/slc3_ia32_gcc323/root/include -Wno-long-long -o tmp/bin/Main.o prg/Main.C
-#gmake: *** No rule to make target `tmp/bin//Fit.o', needed by `bin/Fit'.  Stop.
